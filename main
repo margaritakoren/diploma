@@ -1,3 +1,4 @@
+import random as rnd
 from random import shuffle
 
 def first_fit(items, resources):
@@ -60,6 +61,31 @@ def loss_percentage(bins):
     persentage = (total_sum_loss * 100) / total_sum_resources
     return persentage
 
+def simple_mutation(bins, items):
+    isnotChanged = True
+    first, second = rnd.randint(0, (len(bins) - 1)), rnd.randint(0, (len(bins) - 1))
+    indexes_of_first = []
+    indexes_of_second = []
+    for i in range(2, len(bins[0])):
+        if bins[first][i] == 1:
+            indexes_of_first.append(i)
+        if bins[second][i] == 1:
+            indexes_of_second.append(i)
+
+    while isnotChanged:
+        first_element, second_element = rnd.randint(0, (len(indexes_of_first) - 1)), rnd.randint(0, (len(indexes_of_second) - 1))
+        print(indexes_of_first[first_element], items[indexes_of_first[first_element] - 2])
+        print(indexes_of_second[second_element], items[indexes_of_second[second_element] - 2])
+        if ((bins[second][1] + items[indexes_of_second[second_element] - 2]) > items[indexes_of_first[first_element] - 2]) and ((bins[first][1] + items[indexes_of_first[first_element] - 2]) > items[indexes_of_second[second_element] - 2]):
+
+            bins[first][1] = bins[first][1] + items[indexes_of_first[first_element] - 2] - items[indexes_of_second[second_element] - 2]
+            bins[second][1] = bins[second][1] + items[indexes_of_second[second_element] - 2] - items[indexes_of_first[first_element] - 2]
+            bins[first][indexes_of_first[first_element]], bins[second][indexes_of_second[second_element]] = 0, 0
+            bins[first][indexes_of_second[second_element]], bins[second][indexes_of_first[first_element]] = 1, 1
+            isnotChanged = False
+        return bins
+
+
 
 if __name__ == '__main__':
     a = [340, 340, 340, 340, 340, 340, 340, 340, 365, 365, 365,  365, 365, 365, 365, 365, 385, 385, 385, 385, 385, 385, 385, 385, 385, 385, 415, 415, 415, 415]
@@ -72,7 +98,6 @@ if __name__ == '__main__':
     print(a)
     print(c)
     print(p)
-    print(change_worst_mutation(c, a))
-
-
-
+    for i in range(10):
+        print(simple_mutation(c, a))
+        print(loss_percentage(c))
