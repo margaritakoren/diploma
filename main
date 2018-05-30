@@ -1,7 +1,14 @@
 import random as rnd
 from random import shuffle
 
-def first_fit(items, resources):
+def create_new_bin(i, resourse, item):
+    bin = []
+    bin.append(resourse)
+    bin.append(resourse - item)
+    bin.append(i)
+    return bin
+
+def individual_init(items, resources):
     # items.sort(reverse = True)
     # resources.sort(reverse = True)
     bins = []
@@ -10,10 +17,7 @@ def first_fit(items, resources):
         if len(bins) == 0:
             for l in range(len(resources)):
                 if resources[l] > items[i]:
-                    bin = [0] * (len(items) + 2)
-                    bin[0] = resources[l]
-                    bin[1] = resources[l] - items[i]
-                    bin[i + 2] = bin[i + 2] + 1
+                    bin = create_new_bin(i, resources[l], items[i])
                     del resources[l]
                     bins.append(bin)
                     is_not_added = False
@@ -23,7 +27,7 @@ def first_fit(items, resources):
         else:
             for j in range(len(bins)):
                 if bins[j][1] >= items[i]:
-                    bins[j][i + 2] = bins[j][i + 2] + 1
+                    bins[j].append(i)
                     bins[j][1] = bins[j][1] - items[i]
                     is_not_added = False
                     break
@@ -32,17 +36,33 @@ def first_fit(items, resources):
             if is_not_added and len(resources) > 0:
                 for k in range(len(resources)):
                     if resources[k] > items[i]:
-                        bin = [0] * (len(items) + 2)
-                        bin[0] = resources[k]
-                        bin[1] = resources[k] - items[i]
-                        bin[i + 2] = bin[i + 2] + 1
+                        bin = create_new_bin(i, resources[k], items[i])
                         del resources[k]
                         bins.append(bin)
                         is_not_added = False
                         break
                     else:
                         continue
-    return bins
+    return bins, resources
+
+def population_init(size, items, resources):
+    bins = []
+    population = []
+    for i in range(size):
+        shuffle(items)
+        shuffle(resources)
+        r = resources.copy()
+        bins = individual_init(items, r)
+        population.append(bins)
+
+    return population
+
+def print_population(population):
+    for i in range(len(population)):
+        population[i].sort(key=lambda bin: bin[1])
+        print(population[i])
+        print(fitness_function(population[i]))
+
 
 def change_worst_mutation(bins, items):
     sum_of_items = 0
@@ -52,7 +72,32 @@ def change_worst_mutation(bins, items):
             sum_of_items = sum_of_items + items[i - 2]
     return sum_of_items
 
-def loss_percentage(bins):
+def swap_resource(bins, items, remaining_resources):
+    random_bin = rnd.randint(0, (len(bins) - 2))
+    min_difference = 10**6
+
+    #Подсчёт суммы элементов в данном bin
+    sum_of_items = 0
+    for i in range(2, len(bins)):
+        sum_of_items = sum_of_items + items[bins[random_bin][i]]
+
+    # Замена
+    for j in range(len(remaining_resources)):
+        difference = remaining_resources[j] - sum_of_items
+        if difference >= 0 and difference < min_difference:
+            min_difference = difference
+            min_diff_index = j
+
+    remaining_resources.append(bins[random_bin][0])
+
+    bins[random_bin][0] = remaining_resources[min_diff_index]
+    bins[random_bin][1] = remaining_resources[min_diff_index] - sum_of_items
+
+    del remaining_resources[min_diff_index]
+
+    return bins, remaining_resources
+
+def fitness_function(bins):
     total_sum_resources = 0
     total_sum_loss = 0
     for i in range(len(bins)):
@@ -61,30 +106,51 @@ def loss_percentage(bins):
     persentage = (total_sum_loss * 100) / total_sum_resources
     return persentage
 
-def simple_mutation(bins, items):
-    isnotChanged = True
-    first, second = rnd.randint(0, (len(bins) - 1)), rnd.randint(0, (len(bins) - 1))
-    indexes_of_first = []
-    indexes_of_second = []
-    for i in range(2, len(bins[0])):
-        if bins[first][i] == 1:
-            indexes_of_first.append(i)
-        if bins[second][i] == 1:
-            indexes_of_second.append(i)
+def group_mutation(bins, items):
+    bins.sort(key=lambda bin: bin[1])
+    mutated_bins = []
+    resources_for_mutation = []
 
-    while isnotChanged:
-        first_element, second_element = rnd.randint(0, (len(indexes_of_first) - 1)), rnd.randint(0, (len(indexes_of_second) - 1))
-        print(indexes_of_first[first_element], items[indexes_of_first[first_element] - 2])
-        print(indexes_of_second[second_element], items[indexes_of_second[second_element] - 2])
-        if ((bins[second][1] + items[indexes_of_second[second_element] - 2]) > items[indexes_of_first[first_element] - 2]) and ((bins[first][1] + items[indexes_of_first[first_element] - 2]) > items[indexes_of_second[second_element] - 2]):
+    # Выбираются худшие и случаыные гены
+    worst = bins[-1]
+    random_i, random_j = rnd.randint(0, (len(bins) - 2)), rnd.randint(0, (len(bins) - 2))
+    random_bin_1 = bins[random_i]
+    random_bin_2 = bins[random_j]
 
-            bins[first][1] = bins[first][1] + items[indexes_of_first[first_element] - 2] - items[indexes_of_second[second_element] - 2]
-            bins[second][1] = bins[second][1] + items[indexes_of_second[second_element] - 2] - items[indexes_of_first[first_element] - 2]
-            bins[first][indexes_of_first[first_element]], bins[second][indexes_of_second[second_element]] = 0, 0
-            bins[first][indexes_of_second[second_element]], bins[second][indexes_of_first[first_element]] = 1, 1
-            isnotChanged = False
-        return bins
+    # Формируется список ресурсов для мутации
+    resources_for_mutation.append(worst[0])
+    resources_for_mutation.append(random_bin_1[0])
+    resources_for_mutation.append(random_bin_2[0])
 
+    # Формируется список отрезков для мутации
+    indexes_of_items = worst[2:]
+    indexes_of_items.extend(random_bin_1[2:])
+    indexes_of_items.extend(random_bin_2[2:])
+
+    # Список отрезков перетасовываются, список ресурсов - фильтруется по возрастанию
+    shuffle(indexes_of_items)
+    shuffle(resources_for_mutation)
+    # resources_for_mutation.sort(reverse=True)
+
+    for i in range(len(indexes_of_items)):
+        isnot_added = True
+        if len(mutated_bins) == 0:
+            bin = create_new_bin(indexes_of_items[i], resources_for_mutation[0], items[indexes_of_items[i]])
+            mutated_bins.append(bin)
+            isnot_added = False
+        else:
+            for j in range(len(mutated_bins)):
+                if mutated_bins[j][1] >= items[indexes_of_items[i]]:
+                    mutated_bins[j].append(indexes_of_items[i])
+                    mutated_bins[j][1] = mutated_bins[j][1] - items[indexes_of_items[i]]
+                    isnot_added = False
+                else:
+                    pass
+            if isnot_added:
+                bin = create_new_bin(indexes_of_items[i], resources_for_mutation[1], items[indexes_of_items[i]])
+                mutated_bins.append(bin)
+    print(mutated_bins)
+    return mutated_bins
 
 
 if __name__ == '__main__':
@@ -92,12 +158,175 @@ if __name__ == '__main__':
     b = [1900, 2100, 1850, 1700, 1500, 2000, 2050, 1670, 2000, 1800, 1770, 1500, 2000]
 
     shuffle(a)
-    shuffle(b)
-    c = first_fit(a, b)
-    p = loss_percentage(c)
-    print(a)
-    print(c)
-    print(p)
-    for i in range(10):
-        print(simple_mutation(c, a))
-        print(loss_percentage(c))
+    individual, remaining_resources = individual_init(a, b)
+    print(individual)
+    individual, remaining_resources = swap_resource(individual, a, remaining_resources)
+    print(individual)
+    print(remaining_resources)
+
+import random as rnd
+from random import shuffle
+
+def create_new_bin(i, resourse, item):
+    bin = []
+    bin.append(resourse)
+    bin.append(resourse - item)
+    bin.append(i)
+    return bin
+
+def individual_init(items, resources):
+    # items.sort(reverse = True)
+    # resources.sort(reverse = True)
+    bins = []
+    for i in range(len(items)):
+        is_not_added = True
+        if len(bins) == 0:
+            for l in range(len(resources)):
+                if resources[l] > items[i]:
+                    bin = create_new_bin(i, resources[l], items[i])
+                    del resources[l]
+                    bins.append(bin)
+                    is_not_added = False
+                    break
+                else:
+                    continue
+        else:
+            for j in range(len(bins)):
+                if bins[j][1] >= items[i]:
+                    bins[j].append(i)
+                    bins[j][1] = bins[j][1] - items[i]
+                    is_not_added = False
+                    break
+                else:
+                    continue
+            if is_not_added and len(resources) > 0:
+                for k in range(len(resources)):
+                    if resources[k] > items[i]:
+                        bin = create_new_bin(i, resources[k], items[i])
+                        del resources[k]
+                        bins.append(bin)
+                        is_not_added = False
+                        break
+                    else:
+                        continue
+    return bins, resources
+
+def population_init(size, items, resources):
+    bins = []
+    population = []
+    for i in range(size):
+        shuffle(items)
+        shuffle(resources)
+        r = resources.copy()
+        bins = individual_init(items, r)
+        population.append(bins)
+
+    return population
+
+def print_population(population):
+    for i in range(len(population)):
+        population[i].sort(key=lambda bin: bin[1])
+        print(population[i])
+        print(fitness_function(population[i]))
+
+
+def change_worst_mutation(bins, items):
+    sum_of_items = 0
+    bins.sort(key=lambda bin: bin[1])
+    for i in range(2, len(bins[-1])):
+        if bins[-1][i] == 1:
+            sum_of_items = sum_of_items + items[i - 2]
+    return sum_of_items
+
+def swap_resource(bins, items, remaining_resources):
+    random_bin = rnd.randint(0, (len(bins) - 2))
+    min_difference = 10**6
+
+    #Подсчёт суммы элементов в данном bin
+    sum_of_items = 0
+    for i in range(2, len(bins)):
+        sum_of_items = sum_of_items + items[bins[random_bin][i]]
+
+    # Замена
+    for j in range(len(remaining_resources)):
+        difference = remaining_resources[j] - sum_of_items
+        if difference >= 0 and difference < min_difference:
+            min_difference = difference
+            min_diff_index = j
+
+    remaining_resources.append(bins[random_bin][0])
+
+    bins[random_bin][0] = remaining_resources[min_diff_index]
+    bins[random_bin][1] = remaining_resources[min_diff_index] - sum_of_items
+
+    del remaining_resources[min_diff_index]
+
+    return bins, remaining_resources
+
+def fitness_function(bins):
+    total_sum_resources = 0
+    total_sum_loss = 0
+    for i in range(len(bins)):
+        total_sum_resources = total_sum_resources + bins[i][0]
+        total_sum_loss = total_sum_loss + bins[i][1]
+    persentage = (total_sum_loss * 100) / total_sum_resources
+    return persentage
+
+def group_mutation(bins, items):
+    bins.sort(key=lambda bin: bin[1])
+    mutated_bins = []
+    resources_for_mutation = []
+
+    # Выбираются худшие и случаыные гены
+    worst = bins[-1]
+    random_i, random_j = rnd.randint(0, (len(bins) - 2)), rnd.randint(0, (len(bins) - 2))
+    random_bin_1 = bins[random_i]
+    random_bin_2 = bins[random_j]
+
+    # Формируется список ресурсов для мутации
+    resources_for_mutation.append(worst[0])
+    resources_for_mutation.append(random_bin_1[0])
+    resources_for_mutation.append(random_bin_2[0])
+
+    # Формируется список отрезков для мутации
+    indexes_of_items = worst[2:]
+    indexes_of_items.extend(random_bin_1[2:])
+    indexes_of_items.extend(random_bin_2[2:])
+
+    # Список отрезков перетасовываются, список ресурсов - фильтруется по возрастанию
+    shuffle(indexes_of_items)
+    shuffle(resources_for_mutation)
+    # resources_for_mutation.sort(reverse=True)
+
+    for i in range(len(indexes_of_items)):
+        isnot_added = True
+        if len(mutated_bins) == 0:
+            bin = create_new_bin(indexes_of_items[i], resources_for_mutation[0], items[indexes_of_items[i]])
+            mutated_bins.append(bin)
+            isnot_added = False
+        else:
+            for j in range(len(mutated_bins)):
+                if mutated_bins[j][1] >= items[indexes_of_items[i]]:
+                    mutated_bins[j].append(indexes_of_items[i])
+                    mutated_bins[j][1] = mutated_bins[j][1] - items[indexes_of_items[i]]
+                    isnot_added = False
+                else:
+                    pass
+            if isnot_added:
+                bin = create_new_bin(indexes_of_items[i], resources_for_mutation[1], items[indexes_of_items[i]])
+                mutated_bins.append(bin)
+    print(mutated_bins)
+    return mutated_bins
+
+
+if __name__ == '__main__':
+    a = [340, 340, 340, 340, 340, 340, 340, 340, 365, 365, 365,  365, 365, 365, 365, 365, 385, 385, 385, 385, 385, 385, 385, 385, 385, 385, 415, 415, 415, 415]
+    b = [1900, 2100, 1850, 1700, 1500, 2000, 2050, 1670, 2000, 1800, 1770, 1500, 2000]
+
+    shuffle(a)
+    individual, remaining_resources = individual_init(a, b)
+    print(individual)
+    individual, remaining_resources = swap_resource(individual, a, remaining_resources)
+    print(individual)
+    print(remaining_resources)
+
